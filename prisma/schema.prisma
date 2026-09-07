@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  name      String?
+  role      String     @default("USER") // USER, MERCHANT, ADMIN
+  merchants Merchant[]
+  createdAt DateTime   @default(now())
+}
+
+model Merchant {
+  id        String     @id @default(cuid())
+  name      String
+  userId    String
+  user      User       @relation(fields: [userId], references: [id])
+  products  Product[]
+  policies  Policy[]
+  createdAt DateTime   @default(now())
+
+  @@index([userId])
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  merchantId  String
+  merchant    Merchant @relation(fields: [merchantId], references: [id])
+  name        String
+  description String
+  price       Int      // Minor units (paise)
+  currency    String   @default("INR")
+  inventory   Int      @default(0)
+  category    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([merchantId])
+}
+
+model Policy {
+  id                 String   @id @default(cuid())
+  merchantId         String
+  merchant           Merchant @relation(fields: [merchantId], references: [id])
+  autonomousLimit    Int      // Minor units (paise)
+  approvalThreshold  Int      // Minor units (paise)
+  maxAmount          Int      // Minor units (paise)
+  maxQuantity        Int      
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([merchantId])
+}
+
+model Transaction {
+  id                String   @id @default(cuid())
+  userId            String   // Buyer
+  merchantId        String
+  productId         String
+  productName       String
+  unitPrice         Int      // Minor units (paise)
+  currency          String
+  quantity          Int
+  totalAmount       Int      // Minor units (paise)
+  
+  state             String   @default("PROPOSED") 
+  // States: PROPOSED, POLICY_EVALUATED, ALLOW, APPROVAL_REQUIRED, BLOCKED, APPROVED, REJECTED, CHECKOUT_CREATED, PAYMENT_PENDING, PAID, PAYMENT_FAILED, CANCELLED, EXPIRED
+  
+  razorpayOrderId   String?  @unique
+  razorpayPaymentId String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  auditEvents       AuditEvent[]
+
+  @@index([merchantId])
+  @@index([userId])
+  @@index([razorpayOrderId])
+}
+
+model AuditEvent {
+  id             String      @id @default(cuid())
+  transactionId  String
+  transaction    Transaction @relation(fields: [transactionId], references: [id])
+  eventType      String
+  actor          String
+  payload        String      // JSON string
+  previousHash   String?
+  hash           String
+  createdAt      DateTime    @default(now())
+
+  @@index([transactionId])
+}
